@@ -17,11 +17,16 @@ TRIGGER quercus.usw_after_tier4_scd_transfer
         v_instance_code         course_instance_table.instance_code%TYPE;
         v_note                  object_note.note%TYPE;
         v_timestamp             VARCHAR2 (50) ;
-        v_newline               VARCHAR2 (16) := chr (10) ||chr (13) ;
+        v_crlf                  VARCHAR2 (16) := chr (13) ||chr (10) ;
         v_tagline               VARCHAR2 (80) := 'Note created by trigger: usw_after_tier4_scd_transfer.';
+        v_object_note_type      object_note_type.object_note_type%type := 'T4_TRANSFER';
         
 BEGIN
 
+    IF USW_LOGIC.TIER4_ENROLMENT (:NEW.student_course_detail) = 1 THEN
+
+        --
+        -- Get details for the transferred to course instance .  
      SELECT c.course,
             c.description,
             ci.INSTANCE_CODE,
@@ -35,28 +40,35 @@ BEGIN
       WHERE c.object_id = ci.course
         AND ci.object_id = :new.course_instance;
 
-    IF USW_LOGIC.TIER4_ENROLMENT (:NEW.student_course_detail) = 1 THEN
-
+        --
+        -- Create the note text.
         IF v_course IS NOT NULL THEN
-            v_note := 'Student transferred enrolment to course '|| v_newline ||
-            c_course_description ||' '|| v_newline || v_course_code ||' / '||v_instance_code ||
-            ' in session '|| v_academic_year ||'.'|| v_newline || v_tagline;
+            v_note := 'Student transferred enrolment to course '|| v_crlf ||
+            c_course_description ||' '|| v_crlf || v_course_code ||' / '||v_instance_code ||
+            ' in session '|| v_academic_year ||'.'|| v_crlf || v_tagline;
 
         ELSE
             v_note := 'Student transferred enrolment, no destination course instance was specified.'||
-            v_newline || v_tagline;
+            v_crlf || v_tagline;
 
         END IF;
         
         --
         -- Create an object note against the transferred from course enrolment.
         qp_note.set_object_note (p_object_number => :NEW.student_course_detail, 
-                                 p_object_note_type => 'T4_TRANSFER', 
+                                 p_object_note_type => v_object_note_type, 
                                  p_note => v_note) ;
 
-    END;
+     ELSE
+        -- Do nothing.
+        NULL;
 
-END IF;
+     END IF;
+
+
+END;
+
+
 
 EXCEPTION
 
