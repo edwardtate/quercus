@@ -1,3 +1,4 @@
+'''sql
 TRIGGER quercus.usw_after_tier4_scd_transfer
 -- ================================================================================
 -- Trigger to create a T4_TRANSFER object note against the student_course_detail 
@@ -80,3 +81,4 @@ WHEN OTHERS THEN
     raise_application_error ( - 20001, sqlerrm) ;
 
 END;
+'''
