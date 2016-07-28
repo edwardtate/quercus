@@ -1,4 +1,4 @@
-create or replace TRIGGER quercus.usw_after_tier4_audit_transfer
+create or replace TRIGGER quercus.usw_tier4_audit_transfer
 -- ================================================================================
 -- Trigger to create a T4_TRANSFER object note against the student_course_detail 
 -- where this is a TIER4 enrolment.
@@ -18,12 +18,27 @@ create or replace TRIGGER quercus.usw_after_tier4_audit_transfer
         v_note                  object_note.note%TYPE;
         v_timestamp             VARCHAR2 (50) ;
         v_crlf                  VARCHAR2 (16) := chr (13) ||chr (10) ;
-        v_tagline               VARCHAR2 (80) := 'Note created by trigger: usw_after_tier4_audit_transfer.';
-        v_object_note_type      object_note_type.object_note_type%type := 'T4_TRANSFER';
+        v_tagline               VARCHAR2 (80) := 'Note created by trigger: usw_tier4_audit_transfer.';
+        v_object_note_type      object_note_type.object_note_type%TYPE := 'T4_TRANSFER';
+        v_t4_count              number := 0;
         
 BEGIN
 
-    IF USW_LOGIC.TIER4_ENROLMENT (:NEW.student_course_detail) = 1 THEN
+        -- Count the number of current CAS or VISATIER4 reference numbers
+        SELECT COUNT(prn.object_id)
+          INTO v_t4_count
+          FROM student_course_detail$ scd,
+               PERSON_REFERENCE_NUMBER PRN,
+               REFERENCE_NUMBER_TYPE RNT
+         WHERE PRN.PERSON = SCD.PERSON
+           AND RNT.OBJECT_ID = PRN.REFERENCE_NUMBER_TYPE
+           AND RNT.REFERENCE_NUMBER_TYPE IN ('CAS', 'VISATIER4')
+           AND SYSDATE >= NVL (PRN.START_DATE, SYSDATE - 1) 
+           AND SYSDATE <= NVL (PRN.END_DATE, SYSDATE + 1)
+           AND scd.object_id = :NEW.student_course_detail; 
+
+
+    IF v_t4_count > 0 THEN
 
         --
         -- Get details for the transferred to course instance .  
@@ -41,20 +56,19 @@ BEGIN
         AND ci.object_id = :new.course_instance;
         
         
-        SELECT to_char(sysdate,'fmDay ddth Month YYYY "at" HH24:mi:ss')
+        SELECT to_char(sysdate,'HH24:mi:ss fmDay ddth Month YYYY. ')
         INTO v_timestamp
         from dual;
 
         --
         -- Create the note text.
         IF v_course_code IS NOT NULL THEN
-            v_note := v_timestamp || v_crlf || 'Student transferred enrolment to course '|| v_crlf ||
+            v_note := 'Student transferred enrolment to course '|| v_crlf ||
             v_course_description ||' '|| v_crlf || v_course_code ||' / '||v_instance_code ||
             ' in session '|| v_academic_year ||'.'|| v_crlf || v_tagline;
 
         ELSE
-            v_note := v_timestamp || v_crlf ||
-                      'Student transferred enrolment. No destination course instance was specified!'||
+            v_note := 'Student transferred enrolment. No destination course instance was specified!'||
                       v_crlf || v_tagline;
 
         END IF;
@@ -63,7 +77,7 @@ BEGIN
         -- Create an object note against the transferred from course enrolment.
         qp_note.set_object_note (p_object_number => :NEW.student_course_detail, 
                                  p_object_note_type => v_object_note_type, 
-                                 p_note => v_note) ;
+                                 p_note => v_note) ;                              
 
      ELSE
         -- Do nothing.
